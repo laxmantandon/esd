@@ -22,7 +22,8 @@ app.post('/esd', (req, res) => {
 
     let item_array = []
     for(const val of items) {
-        array_item = val.hscode + " " + val.stockitemname + " " + String(val.qty) + " " + String(val.rate) + " " + String(val.amt)
+        let hscode = val.hscode ? val.hscode : " "  
+        array_item = hscode + " " + val.stockitemname + " " + String(val.qty) + " " + String(val.rate) + " " + String(val.amt)
         item_array.push(array_item)
     }
     payload.items_list = item_array
@@ -37,17 +38,13 @@ app.post('/esd', (req, res) => {
 
     axios.post(req.headers.hostname, payload , options)
     .then((x) => {
-        // console.log(x);
-        let str_data = JSON.stringify(x.data);
-        // console.log('str_data', str_data);
-        let result = str_data.replace(/\\/g,"");
-        console.log(result);
-        // console.log(result);
-        // res.setHeader('Content-Type', 'application/json');
-        res.send(result);
+        let result = JSON.stringify(x.data.replace(/\\/g,""));
+        let result1 = JSON.parse(result);
+        res.setHeader('Content-Type', 'application/json');
+        res.send(result1);
     }).catch(ex => {
         console.log(ex)
-        res.send(ex)
+        res.send(ex);
     })
 
 
@@ -95,9 +92,9 @@ app.post('/esd', (req, res) => {
 
 })
 
-server.listen(port, host, () => {
-    console.log('Server Listening')
-})
+// server.listen(port, host, () => {
+//     console.log('Server Listening')
+// })
 
 module.exports = {
     app, server

@@ -110,6 +110,12 @@ const createTray = () => {
 
   buildTrayMenu(menuTemplate)
 
+  server.listen(express.get('Port'), express.get('Host'), () => {
+    menuTemplate[1].enabled = false
+    menuTemplate[2].enabled = true
+    buildTrayMenu(menuTemplate)
+  })
+
 }
 
 app.on('ready', createTray);
