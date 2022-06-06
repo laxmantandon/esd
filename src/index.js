@@ -78,9 +78,11 @@ const createTray = () => {
       label: 'About',
       click: () => {
         dialog.showMessageBox({
-          type: "ESD",
           title: 'ESD',
-          message: "Utility App for Signing Invoices"
+          message: "ESD 1.01",
+          detail: "Developed and Maintained",
+          buttons: ['OK'],
+          icon: "./icon/stop.png"
         })
       }
     },
