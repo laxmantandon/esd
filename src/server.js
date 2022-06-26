@@ -145,38 +145,63 @@ app.get('/dtr', (req, res) => {
 
     export_location = req.headers.exportpath
     import_location = req.headers.importpath
+    error_location  = req.headers.errorpath
     file_name       = req.headers.filename
     invoice_number  = req.headers.invoicenumber
-    print_delay     = req.headers.printdelay ? req.headers.printdelay : 8000 
-    
+    print_delay     = req.headers.printdelay ? parseInt(req.headers.printdelay) : 8000 
+    qr_image_path   = req.headers.qrimagepath
+
     file_path = path.join(import_location, `R_${file_name}`)
+    error_file_path = path.join(error_location, `R_${file_name}`)
 
     setTimeout(() => {
         fs.readFile(file_path, 'utf-8', function(err, data) {
             if (err) {
                 res.setHeader('Content-Type', 'application/json');
                 res.send({
-                    "error_status": String(err)
+                    "error_status": "Could not process invoice, check error log",
+                    "internal_error":String(err)
                 });        
-            }
+            } else{
 
-            // x = data.split(/\r?\n/).forEach((line) => {
-            //     console.log('line -> ',  line)
-            // })
-            x = data.split(/\r?\n/)
-            var cu_date = x.find(element => element.includes("DATE"));
-            var cu_serial = x.find(element => element.includes("CUSN:"));
-            cu_serial = cu_serial + "_" + cu_date.replace("|", "");
-            var cu_invoice = x.find(element => element.includes("CUIN:"));
-            var verify_url = x.find(element => element.includes("https:"));
-            res.setHeader('Content-Type', 'application/json');
-                res.send({
-                    "invoice_number": invoice_number,
-                    "cu_serial_number": cu_serial.trim().replace("CUSN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, ""),
-                    "cu_invoice_number": cu_invoice.trim().replace("CUIN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, ""),
-                    "verify_url": verify_url.trim().replace("|",""),
-                    "description": "Invoice Signed Success"
-            });     
+                x = data.split(/\r?\n/)
+                var cu_date = x.find(element => element.includes("DATE"));
+                var cu_serial = x.find(element => element.includes("CUSN:"));
+                cu_serial = cu_serial + "_" + cu_date.replace("|", "");
+                cu_serial = cu_serial.trim().replace("CUSN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, "")
+                var cu_invoice = x.find(element => element.includes("CUIN:"));
+                cu_invoice = cu_invoice.trim().replace("CUIN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, "")
+                var verify_url = x.find(element => element.includes("https:"));
+                verify_url = verify_url.trim().replace("|","")
+                
+                if (qr_image_path) {
+                    var qrcode = verify_url;
+                    var file_name = path.join(qr_image_path, `${cu_invoice}.png`);
+        
+                    var qr_png = qr.image(qrcode, {type: 'png'});
+        
+                    var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+        
+                    tempFile.on('open', function(fd) {
+                        Jimp.read(file_name, function (err, image) {
+                            if (err) {
+                              console.log(err)
+                            } else {
+                              image.write(path.join(qr_image_path, `${cu_invoice}.jpeg`));
+                            }
+                          });
+                    })    
+                }
+
+                res.setHeader('Content-Type', 'application/json');
+                    res.send({
+                        "invoice_number": invoice_number,
+                        "cu_serial_number": cu_serial,
+                        "cu_invoice_number": cu_invoice,
+                        "verify_url": verify_url,
+                        "description": "Invoice Signed Success"
+                });     
+            }
         })    
     }, print_delay)
 
