@@ -79,7 +79,7 @@ const createTray = () => {
       click: () => {
         dialog.showMessageBox({
           title: 'ESD',
-          message: "ESD 1.02",
+          message: "ESD 1.03", //1.02
           detail: "Developed and Maintained",
           buttons: ['OK'],
           icon: "./icon/stop.png"

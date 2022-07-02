@@ -2,19 +2,37 @@
   "name": "esd",
   "productName": "esd",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "eSign utility Application",
   "main": "src/index.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "setup": "electron-builder"
+  },
+
+  "setup": {
+      "appId": "esd.vaptechltd.co.ke",
+      "win": {
+        "target": [
+          "nsis"
+        ],
+        "icon": "icon.ico"
+      },
+      "nsis": {
+        "OneClick": true,
+        "installerIcon": "icon.ico",
+        "uninstallerIcon": "icon.ico",
+        "uninstallDisplayName": "Uninstall eSign Utility",
+        "allowToChangeInstallationDirectory": true
+      }
   },
   "keywords": [],
   "author": {
-    "name": "laxman",
-    "email": "laxmantandon@gmail.com"
+    "name": "Vap Technologies Limited",
+    "email": "vishal@vaptechltd.co.ke"
   },
   "license": "MIT",
   "config": {
@@ -54,12 +72,8 @@
     "request": "^2.81.0"
   },
   "devDependencies": {
-    "@electron-forge/cli": "^6.0.0-beta.63",
-    "@electron-forge/maker-deb": "^6.0.0-beta.63",
-    "@electron-forge/maker-rpm": "^6.0.0-beta.63",
-    "@electron-forge/maker-squirrel": "^6.0.0-beta.63",
-    "@electron-forge/maker-zip": "^6.0.0-beta.63",
     "electron": "19.0.1",
+    "electron-builder": "^23.1.0",
     "electron-packager": "^15.5.1"
   }
 }
