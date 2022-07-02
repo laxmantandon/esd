@@ -87,3 +87,7 @@ typings/
 
 # Electron-Forge
 out/
+
+dist/
+
+esd-win32-x64/

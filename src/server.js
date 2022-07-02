@@ -207,6 +207,124 @@ app.get('/dtr', (req, res) => {
 
 })
 
+app.post('/ace', (req, res) => {
+    payload = req.body
+    items = payload.items_list
+    led = payload.led_list
+
+    let item_array = []
+    if (items) {
+        for (const val of items) {
+            let hscode = val.hscode ? val.hscode : " "
+            let item_detail = {
+                "HSDesc": val.stockitemname,
+                "TaxRate": val.taxrate,
+                "ItemAmount": val.amt,
+                "TaxAmount": val.taxamount,
+                "TransactionType": "1",
+                "UnitPrice": val.rate,
+                "HSCode": hscode,
+                "Quantity": val.qty
+            }
+            item_array.push(item_detail)
+        }    
+    }
+    if (led) {
+        for (const val of led) {
+            let hscode = val.hscode ? val.hscode : " "
+            let item_detail = {
+                "HSDesc": val.stockitemname,
+                "TaxRate": val.taxrate,
+                "ItemAmount": val.amt,
+                "TaxAmount": val.taxamount,
+                "TransactionType": "1",
+                "UnitPrice": val.rate,
+                "HSCode": hscode,
+                "Quantity": val.qty
+            }
+            item_array.push(item_detail)
+        }
+    }
+
+    //payload.items_list = item_array
+    qr_image_path = payload.qr_image_path
+
+
+    let ace_req = {
+        "Invoice": {
+            "SenderId": req.headers.senderid,
+            "InvoiceTimestamp": payload.timestamp,
+            "InvoiceCategory": payload.vouchertype,
+            "TraderSystemInvoiceNumber": payload.invoice_number,
+            "RelevantInvoiceNumber": payload.rel_doc_number,
+            "PINOfBuyer": payload.customer_pin,
+            "Discount": payload.net_discount_total,
+            "InvoiceType": "Original",
+            "ItemDetails": item_array,
+            "TotalInvoiceAmount": payload.grand_total,
+            "TotalTaxableAmount": payload.net_subtotal,
+            "TotalTaxAmount": payload.tax_total,
+            "ExemptionNumber": payload.customer_exid
+        }
+    }
+
+    const options = {
+        headers: {
+            //'Authorization': req.headers.authorization,
+            'Content-Type': 'application/json',
+            'Content-Length': JSON.stringify(payload).length
+        }
+    };
+
+    axios.post(req.headers.hostname, ace_req, options)
+        .then((x) => {
+            if (x) {
+                let result = {
+                    "error_status": "",
+                    "invoice_number": x.data.Existing.TraderSystemInvoiceNumber,
+                    "cu_serial_number": payload.deviceno + " " + x.data.Existing.CommitedTimestamp,
+                    "cu_invoice_number": x.data.Existing.ControlCode,
+                    "verify_url": x.data.Existing.QRCode,
+                    "description": "Invoice Signed Successfully"
+                }
+                // var result = JSON.stringify(x.data.replace(/\\/g, ""));
+                // var result1 = JSON.parse(result);
+                // var result2 = JSON.parse(result1);
+
+                res.setHeader('Content-Type', 'application/json');
+                res.send(result);
+            }
+
+            if (qr_image_path) {
+                var qrcode = x.data.Existing.QRCode
+                var file_name = path.join(qr_image_path, `${x.data.Existing.ControlCode}.png`);
+    
+                var qr_png = qr.image(qrcode, {type: 'png'});
+    
+                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+    
+                tempFile.on('open', function(fd) {
+                    Jimp.read(file_name, function (err, image) {
+                        if (err) {
+                          console.log(err)
+                        } else {
+                          image.write(path.join(qr_image_path, `${x.data.Existing.ControlCode}.jpeg`));
+                        }
+                      });
+                })    
+            }
+
+        }).catch(ex => {
+            let error = {
+                "error_status": String(ex),
+                "verify_url": "",
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.send(error);
+
+        });
+})
 
 
 // server.listen(port, host, () => {
