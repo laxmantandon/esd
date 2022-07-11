@@ -7,6 +7,23 @@ const {
   dialog
 } = require('electron');
 
+var AutoLaunch = require('auto-launch');
+
+var autoLauncher = new AutoLaunch({
+  name: "esd"
+});
+
+autoLauncher.isEnabled()
+.then(function(isEnabled){
+	if(isEnabled){
+	    return;
+	}
+	autoLauncher.enable();
+})
+.catch(function(err){
+    // handle error
+});
+
 const path = require('path');
 const { app: express, server} = require('./server')
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.

@@ -4,11 +4,11 @@ const express = require('express')
 const app = express()
 const server = http.createServer(app)
 const qr = require('qr-image')
-const promisify = require('util')
 const Jimp = require("jimp")
 const path = require('path')
 const fs = require('fs')
-const readline = require('readline')
+const xml2js = require('xml2js').parseString
+
 
 const host = "0.0.0.0"
 const port = "35040"
@@ -18,6 +18,11 @@ app.set('Port', port)
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
+
+//var Tremol = require(__dirname + "/nodejs_tremol_loader").load(["fp_core.js", "fp.js"]);
+var Tremol = require("./nodejs_tremol_loader").load(["./fp_core.js", "./fp.js"]);
+var fp = new Tremol.FP();
+
 
 app.get('/', (req, res) => res.send('ESD App Running'))
 
@@ -74,7 +79,7 @@ app.post('/esd', (req, res) => {
                 tempFile.on('open', function(fd) {
                     Jimp.read(file_name, function (err, image) {
                         if (err) {
-                          console.log(err)
+                        //   console.log(err)
                         } else {
                           image.write(path.join(qr_image_path, `${result2["cu_invoice_number"]}.jpeg`));
                         }
@@ -101,7 +106,6 @@ app.post('/esd', (req, res) => {
             }
         });
 })
-
 
 app.post('/device', (req, res) => {
 
@@ -139,7 +143,6 @@ app.post('/device', (req, res) => {
             }
         })
 })
-
 
 app.get('/dtr', (req, res) => {
 
@@ -185,7 +188,7 @@ app.get('/dtr', (req, res) => {
                     tempFile.on('open', function(fd) {
                         Jimp.read(file_name, function (err, image) {
                             if (err) {
-                              console.log(err)
+                            //   console.log(err)
                             } else {
                               image.write(path.join(qr_image_path, `${cu_invoice}.jpeg`));
                             }
@@ -215,7 +218,7 @@ app.post('/ace', (req, res) => {
     let item_array = []
     if (items) {
         for (const val of items) {
-            let hscode = val.hscode ? val.hscode : " "
+            let hscode = val.hscode ? val.hscode : ""
             let item_detail = {
                 "HSDesc": val.stockitemname,
                 "TaxRate": val.taxrate,
@@ -231,7 +234,7 @@ app.post('/ace', (req, res) => {
     }
     if (led) {
         for (const val of led) {
-            let hscode = val.hscode ? val.hscode : " "
+            let hscode = val.hscode ? val.hscode : ""
             let item_detail = {
                 "HSDesc": val.stockitemname,
                 "TaxRate": val.taxrate,
@@ -251,33 +254,36 @@ app.post('/ace', (req, res) => {
 
 
     let ace_req = {
-        "Invoice": {
-            "SenderId": req.headers.senderid,
-            "InvoiceTimestamp": payload.timestamp,
-            "InvoiceCategory": payload.vouchertype,
-            "TraderSystemInvoiceNumber": payload.invoice_number,
-            "RelevantInvoiceNumber": payload.rel_doc_number,
-            "PINOfBuyer": payload.customer_pin,
-            "Discount": payload.net_discount_total,
-            "InvoiceType": "Original",
-            "ItemDetails": item_array,
-            "TotalInvoiceAmount": payload.grand_total,
-            "TotalTaxableAmount": payload.net_subtotal,
-            "TotalTaxAmount": payload.tax_total,
-            "ExemptionNumber": payload.customer_exid
+        Invoice: {
+            SenderId: req.headers.senderid,
+            InvoiceTimestamp: payload.timestamp,
+            InvoiceCategory: payload.vouchertype,
+            TraderSystemInvoiceNumber: payload.invoice_number,
+            RelevantInvoiceNumber: payload.rel_doc_number? payload.rel_doc_number : "",
+            PINOfBuyer: payload.customer_pin,
+            Discount: payload.net_discount_total,
+            InvoiceType: "Original",
+            ItemDetails: item_array,
+            TotalInvoiceAmount: payload.grand_total,
+            TotalTaxableAmount: payload.net_subtotal,
+            TotalTaxAmount: payload.tax_total,
+            ExemptionNumber: payload.customer_exid ? payload.customer_exid : ""
         }
     }
+    const json = JSON.stringify(ace_req);
 
     const options = {
         headers: {
             //'Authorization': req.headers.authorization,
             'Content-Type': 'application/json',
-            'Content-Length': JSON.stringify(payload).length
+            // 'Content-Length': JSON.stringify(payload).length
         }
     };
+    
 
-    axios.post(req.headers.hostname, ace_req, options)
+    axios.post(req.headers.hostname, json, options)
         .then((x) => {
+            // console.log(x.data)
             if (x) {
                 let result = {
                     "error_status": "",
@@ -306,7 +312,7 @@ app.post('/ace', (req, res) => {
                 tempFile.on('open', function(fd) {
                     Jimp.read(file_name, function (err, image) {
                         if (err) {
-                          console.log(err)
+                        //   console.log(err)
                         } else {
                           image.write(path.join(qr_image_path, `${x.data.Existing.ControlCode}.jpeg`));
                         }
@@ -315,8 +321,10 @@ app.post('/ace', (req, res) => {
             }
 
         }).catch(ex => {
+            // console.log(ex.response)
+            // console.log(ex.response.data['Error'].message)
             let error = {
-                "error_status": String(ex),
+                "error_status": ex.response.data['Error'].message,
                 "verify_url": "",
             }
 
@@ -324,6 +332,274 @@ app.post('/ace', (req, res) => {
             res.send(error);
 
         });
+})
+
+
+app.post('/total', (req, res) => {
+
+    payload = req.body
+    print_host = req.headers.hostname;
+    printer_ip = req.headers.printerip + ':' + req.headers.printerport;
+    try {
+        fp.ServerSetSettings(print_host);
+        fp.ServerSetDeviceTcpSettings(req.headers.printerip, req.headers.printerport, req.headers.senderid);
+        var device = fp.ServerFindDevice();
+
+        if (device) {
+            fp.ServerSetDeviceSerialSettings(device.serialPort, device.baudRate, false); //If FD is connected on serial port or USB
+            fp.PrintDiagnostics();
+        }
+        else {
+            let error = {
+                "error_status": "Device Not Found"
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.send(error);
+        }
+
+        const status = fp.ReadStatus()
+        if (status) {
+            try {
+                fp.OpenInvoiceWithFreeCustomerData("", payload.customer_pin, "", "", "", "", "", "")
+                for (const val of payload.item_list) {
+                    let hscode = val.hscode ? val.hscode : ""
+                    fp.SellPLUfromExtDB(val.stockitemname, val.taxrateclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
+                }
+
+            } catch (e) {
+                let error = {
+                    "error_status": String(e)
+                }
+                res.setHeader('Content-Type', 'application/json');
+                res.send(error);
+            }
+            const close = fp.CloseReceipt()
+            res.json(close)
+        }
+    } catch (e) {
+        let error = {
+            "error_status": String(e)
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        res.send(error);
+    }
+})
+
+
+app.post('/total_notworking', (req, res) => {
+    payload = req.body;
+    print_host = req.headers.hostname;
+    printer_ip = req.headers.printerip + ':' + req.headers.printerport;
+
+    customer_exid = payload.customer_exid ? payload.customer_exid : ""
+    ref_invoice_no = payload.rel_doc_number? payload.rel_doc_number : "",
+
+    all_requests = [];
+
+    url_Settings = axios.get(`${print_host}/Settings(tcp=1,ip=${req.headers.printerip},port=${req.headers.printerport},password=${req.headers.senderid})`)
+    url_Settings.then(response => {
+        xml2js(response.data, (err, result) => {
+            if (err == null) {
+                if (result.Res.$.Code == '0'){
+                    // success
+                    
+                } else {
+                    // xml fail
+                    res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                    return
+                }
+            } else {
+                res.send({"error_status": String(err)})
+                return
+            }
+        })
+    }).catch(error => {
+        res.send({"error_status": String(error)})
+    })
+    
+    url_ReadStatus = axios.get(`${print_host}/ReadStatus()`)
+    url_ReadStatus.then(response => {
+        xml2js(response.data, (err, result) => {
+            if (err == null) {
+                if (result.Res.$.Code !== '0'){
+                    res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                    return
+                } 
+            } else {
+                res.send({"error_status": String(err)})
+                return
+            }
+        })
+    }).catch(error => {
+        res.send({"error_status": String(error)})
+    })
+
+    if (payload.vouchertype == 'Tax Invoice') {
+        url_Invoice = axios.get(`${print_host}/OpenInvoiceWithFreeCustomerData(CompanyName=,ClientPINnum=${payload.customer_pin},HeadQuarters=,Address=,PostalCodeAndCity=,ExemptionNum=${customer_exid},TraderSystemInvNum=${payload.invoice_number})`)
+        url_Invoice.then(response => {
+            xml2js(response.data, (err, result) => {
+                if (err == null) {
+                    if (result.Res.$.Code !== '0'){
+                        res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                        return
+                    } 
+                } else {
+                    res.send({"error_status": String(err)})
+                    return
+                }
+            })
+        }).catch(error => {
+            res.send({"error_status": String(error)})
+        })
+    }
+    
+    if(payload.vouchertype == 'Debit Note') {
+        url_Invoice = axios.get(`${print_host}/OpenDebitNoteWithFreeCustomerData(CompanyName=,ClientPINnum=${payload.customer_pin},HeadQuarters=,Address=,PostalCodeAndCity=,ExemptionNum=${customer_exid},RelatedInvoiceNum=${ref_invoice_no},TraderSystemInvNum=${payload.invoice_number})`)
+        url_Invoice.then(response => {
+            xml2js(response.data, (err, result) => {
+                if (err == null) {
+                    if (result.Res.$.Code !== '0'){
+                        res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                        return
+                    } 
+                } else {
+                    res.send({"error_status": String(err)})
+                    return
+                }
+            })
+        }).catch(error => {
+            res.send({"error_status": String(error)})
+        })
+    }
+    
+    if(payload.vouchertype == 'Credit Note') {
+        url_Invoice = axios.get(`${print_host}/OpenCreditNoteWithFreeCustomerData(CompanyName=,ClientPINnum=${payload.customer_pin},HeadQuarters=,Address=,PostalCodeAndCity=,ExemptionNum=${customer_exid},RelatedInvoiceNum=${ref_invoice_no},TraderSystemInvNum=${payload.invoice_number})`)
+        all_requests.then(response => {
+            xml2js(response.data, (err, result) => {
+                if (err == null) {
+                    if (result.Res.$.Code !== '0'){
+                        res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                        return
+                    } 
+                } else {
+                    res.send({"error_status": String(err)})
+                    return
+                }
+            })
+        }).catch(error => {
+            res.send({"error_status": String(error)})
+        })
+    }
+    
+    for (item of payload.items_list) {
+        hscode = item.hscode ? item.hscode : ""
+        response = axios.get(`${print_host}/SellPLUfromExtDB(NamePLU=${item.stockitemname},OptionVATClass=${item.taxrateclass},Price=${item.rate},MeasureUnit=${item.base_unit},HSCode=${hscode},HSName=,VATGrRate=${item.taxrate},Quantity=${item.qty},DiscAddP=)`)
+        response.then(response => {
+            xml2js(response.data, (err, result) => {
+                if (err == null) {
+                    if (result.Res.$.Code !== '0'){
+                        res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                        return
+                    } 
+                } else {
+                    res.send({"error_status": String(err)})
+                    return
+                }
+            })
+        }).catch(error => {
+            res.send({"error_status": String(error)})
+        })
+    }
+    
+    if (payload.led_list) {
+        for (item of payload.led_list) {
+            hscode = item.hscode ? item.hscode : ""
+            response = axios.get(`${print_host}/SellPLUfromExtDB(NamePLU=${item.stockitemname},OptionVATClass=${item.taxrateclass},Price=${item.rate},MeasureUnit=${item.base_unit},HSCode=${hscode},HSName=,VATGrRate=${item.taxrate},Quantity=${item.qty},DiscAddP=)`)
+            response.then(response => {
+                xml2js(response.data, (err, result) => {
+                    if (err == null) {
+                        if (result.Res.$.Code !== '0'){
+                            res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                            return
+                        } 
+                    } else {
+                        res.send({"error_status": String(err)})
+                        return
+                    }
+                })
+            }).catch(error => {
+                res.send({"error_status": String(error)})
+            })
+        }            
+    }
+
+    url_CloseReceipt = axios.get(`${print_host}/CloseReceipt()`)
+    url_CloseReceipt.then(response => {
+        xml2js(response.data, (err, result) => {
+            if (err == null) {
+                if (result.Res.$.Code !== '0'){
+                    res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                    return
+                } 
+            } else {
+                res.send({"error_status": String(err)})
+                return
+            }
+        })
+    }).catch(error => {
+        res.send({"error_status": String(error)})
+    })
+    // all_requests.push(url_CloseReceipt)
+
+    url_ReadDateTime = axios.get(`${print_host}/ReadDateTime()`)
+    url_ReadDateTime.then(response => {
+        xml2js(response.data, (err, result) => {
+            if (err == null) {
+                if (result.Res.$.Code !== '0'){
+                    res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                    return
+                } 
+            } else {
+                res.send({"error_status": String(err)})
+                return
+            }
+        })
+    }).catch(error => {
+        res.send({"error_status": String(error)})
+    })
+
+
+    get_json
+
+    // all_requests.push(url_ReadDateTime)
+
+    // axios.all(all_requests)
+    //     .then(
+    //         axios.spread((...responses) => {
+    //             for (response of responses) {
+    //                 xml2js(response.data, (err, result) => {
+    //                     if (err == null) {
+    //                         if (result.Res.$.Code !== '0'){
+    //                             res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+    //                             return
+    //                         } 
+    //                     } else {
+    //                         res.send({"error_status": String(err)})
+    //                         return
+    //                     }
+    //                 })
+    //             }
+    //             res.send(responses[-1].data);
+    //         })
+    //     )
+    //     .catch(error => {
+    //         console.log(error)
+    //         res.send(error)
+    //         return
+    //     })
+
 })
 
 

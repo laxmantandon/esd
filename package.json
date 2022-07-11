@@ -12,22 +12,21 @@
     "lint": "echo \"No linting configured\"",
     "setup": "electron-builder"
   },
-
   "setup": {
-      "appId": "esd.vaptechltd.co.ke",
-      "win": {
-        "target": [
-          "nsis"
-        ],
-        "icon": "icon.ico"
-      },
-      "nsis": {
-        "OneClick": true,
-        "installerIcon": "icon.ico",
-        "uninstallerIcon": "icon.ico",
-        "uninstallDisplayName": "Uninstall eSign Utility",
-        "allowToChangeInstallationDirectory": true
-      }
+    "appId": "esd.vaptechltd.co.ke",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "OneClick": true,
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "uninstallDisplayName": "Uninstall eSign Utility",
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "keywords": [],
   "author": {
@@ -63,13 +62,19 @@
     }
   },
   "dependencies": {
+    "auto-launch": "^5.0.5",
     "axios": "^0.27.2",
     "electron-squirrel-startup": "^1.0.0",
     "express": "^4.18.1",
+    "https": "^1.0.0",
     "jimp": "^0.16.1",
+    "localStorage": "^1.0.4",
     "qr-image": "^3.2.0",
     "qrcode": "^1.5.0",
-    "request": "^2.81.0"
+    "request": "^2.81.0",
+    "xml2js": "^0.4.23",
+    "xmldom": "^0.6.0",
+    "xmlhttprequest": "^1.8.0"
   },
   "devDependencies": {
     "electron": "19.0.1",
