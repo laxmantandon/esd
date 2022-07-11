@@ -334,12 +334,136 @@ app.post('/ace', (req, res) => {
         });
 })
 
+app.post('/datecs', (req, res) => {
+    payload = req.body
+    items = payload.items_list
+    led = payload.led_list
+    transaction_type = ""
+    if (payload.vouchertype == "Tax Invoice") {
+        transaction_type = 0
+    } else if (payload.vouchertype == "Credit Note") {
+        transaction_type = 1
+    } else if (payload.vouchertype == "Debit Note") {
+        transaction_type = 2
+    }
+
+    let item_array = []
+    if (items) {
+        for (const val of items) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "name": val.stockitemname,
+                "unitPrice": val.rate,
+                "hsCode": hscode,
+                "quantity": val.qty
+            }
+            item_array.push(item_detail)
+        }    
+    }
+    if (led) {
+        for (const val of led) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "name": val.stockitemname,
+                "unitPrice": val.rate,
+                "hsCode": hscode,
+                "quantity": val.qty
+            }
+            item_array.push(item_detail)
+        }
+    }
+
+    //payload.items_list = item_array
+    qr_image_path = payload.qr_image_path
+
+
+    let ace_req = {
+        invoiceType: 0,
+        transactionType: transaction_type,
+        cashier: "name",
+        buyer: {
+            pinOfBuyer: payload.customer_pin
+        },
+        items: item_array,
+        payment: {
+            amount: payload.grand_total,
+
+        },
+        relevantNumber: payload.rel_doc_number? payload.rel_doc_number : "",
+        TraderSystemInvoiceNumber: payload.invoice_number,
+        ExemptionNumber: payload.customer_exid ? payload.customer_exid : ""        
+    }
+    const json = JSON.stringify(ace_req);
+
+    const options = {
+        headers: {
+            //'Authorization': req.headers.authorization,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'RequestId': req.headers.requestid
+            // 'Content-Length': JSON.stringify(payload).length
+        }
+    };
+    
+
+    axios.post(req.headers.hostname, json, options)
+        .then((x) => {
+            // console.log(x.data)
+            if (x) {
+                let result = {
+                    "error_status": "",
+                    "invoice_number": x.data.invoiceExtension,
+                    "cu_serial_number": x.data.msn + " " + x.data.DateTime,
+                    "cu_invoice_number": x.data.mtn,
+                    "verify_url": x.data.verificationUrl,
+                    "description": "Invoice Signed Successfully"
+                }
+                // var result = JSON.stringify(x.data.replace(/\\/g, ""));
+                // var result1 = JSON.parse(result);
+                // var result2 = JSON.parse(result1);
+
+                res.setHeader('Content-Type', 'application/json');
+                res.send(result);
+            }
+
+            if (qr_image_path) {
+                var qrcode = x.data.Existing.QRCode
+                var file_name = path.join(qr_image_path, `${x.data.Existing.ControlCode}.png`);
+    
+                var qr_png = qr.image(qrcode, {type: 'png'});
+    
+                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+    
+                tempFile.on('open', function(fd) {
+                    Jimp.read(file_name, function (err, image) {
+                        if (err) {
+                        //   console.log(err)
+                        } else {
+                          image.write(path.join(qr_image_path, `${x.data.Existing.ControlCode}.jpeg`));
+                        }
+                      });
+                })    
+            }
+
+        }).catch(ex => {
+            // console.log(ex.response)
+            // console.log(ex.response.data['Error'].message)
+            let error = {
+                "error_status": ex.message,
+                "verify_url": "",
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.send(error);
+
+        });
+})
+
 
 app.post('/total', (req, res) => {
-
     payload = req.body
     print_host = req.headers.hostname;
-    printer_ip = req.headers.printerip + ':' + req.headers.printerport;
+    // printer_ip = req.headers.printerip + ':' + req.headers.printerport;
     try {
         fp.ServerSetSettings(print_host);
         fp.ServerSetDeviceTcpSettings(req.headers.printerip, req.headers.printerport, req.headers.senderid);
