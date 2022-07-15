@@ -399,35 +399,30 @@ app.post('/datecs', (req, res) => {
             //'Authorization': req.headers.authorization,
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'RequestId': req.headers.requestid
-            // 'Content-Length': JSON.stringify(payload).length
+            'RequestId': req.headers.requestid,
+            'Content-Length': JSON.stringify(ace_req).length
         }
     };
-    
 
     axios.post(req.headers.hostname, json, options)
-        .then((x) => {
-            // console.log(x.data)
-            if (x) {
+        .then((response) => {
+            if (response) {
                 let result = {
                     "error_status": "",
-                    "invoice_number": x.data.invoiceExtension,
-                    "cu_serial_number": x.data.msn + " " + x.data.DateTime,
-                    "cu_invoice_number": x.data.mtn,
-                    "verify_url": x.data.verificationUrl,
+                    "invoice_number": payload.TraderSystemInvoiceNumber,
+                    "cu_serial_number": response.data.msn + " " + response.data.DateTime,
+                    "cu_invoice_number": response.data.mtn,
+                    "verify_url": response.data.verificationUrl,
                     "description": "Invoice Signed Successfully"
                 }
-                // var result = JSON.stringify(x.data.replace(/\\/g, ""));
-                // var result1 = JSON.parse(result);
-                // var result2 = JSON.parse(result1);
 
                 res.setHeader('Content-Type', 'application/json');
                 res.send(result);
             }
 
             if (qr_image_path) {
-                var qrcode = x.data.Existing.QRCode
-                var file_name = path.join(qr_image_path, `${x.data.Existing.ControlCode}.png`);
+                var qrcode = response.data.verificationUrl
+                var file_name = path.join(qr_image_path, `${response.data.mtn}.png`);
     
                 var qr_png = qr.image(qrcode, {type: 'png'});
     
@@ -438,12 +433,12 @@ app.post('/datecs', (req, res) => {
                         if (err) {
                         //   console.log(err)
                         } else {
-                          image.write(path.join(qr_image_path, `${x.data.Existing.ControlCode}.jpeg`));
+                        image.write(path.join(qr_image_path, `${response.data.mtn}.jpeg`));
                         }
-                      });
+                    });
                 })    
             }
-
+        
         }).catch(ex => {
             // console.log(ex.response)
             // console.log(ex.response.data['Error'].message)
