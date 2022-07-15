@@ -457,11 +457,11 @@ app.get('/total_file', (req, res) => {
 
     export_location = req.headers.exportpath
     import_location = req.headers.importpath
-    error_location  = req.headers.errorpath
     file_name       = req.headers.filename
     invoice_number  = req.headers.invoicenumber
     print_delay     = req.headers.printdelay ? parseInt(req.headers.printdelay) : 8000 
     qr_image_path   = req.headers.qrimagepath
+    deviceno        = req.headers.deviceno
 
     file_path = path.join(import_location, `ok_${file_name}`)
     error_file_path = path.join(import_location, `err_${file_name}`)
@@ -493,16 +493,37 @@ app.get('/total_file', (req, res) => {
                 })
                        
             } else{
+                var cu_date = "";
+                var cu_serial = "";
+                var cu_invoice = "";
+                var verify_url = "";
+                xml2js(data, (err, result) => {
+                    if (err) {
+                        res.send({"error_status": String(err)})
+                        return
+                    } else {
+                        current_date = new Date()
+                        cu_date = current_date.toISOString()
+                        cu_invoice = result.Res.Res[0].$.Value
+                        cu_serial = deviceno + " " + cu_date; ;
+                        verify_url = result.Res.Res[1].$.Value;
+                        verify_url.replace(" ", "");
 
-                x = data.split(/\r?\n/)
-                var cu_date = x.find(element => element.includes("DATE"));
-                var cu_serial = x.find(element => element.includes("CUSN:"));
-                cu_serial = cu_serial + "_" + cu_date.replace("|", "");
-                cu_serial = cu_serial.trim().replace("CUSN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, "")
-                var cu_invoice = x.find(element => element.includes("CUIN:"));
-                cu_invoice = cu_invoice.trim().replace("CUIN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, "")
-                var verify_url = x.find(element => element.includes("https:"));
-                verify_url = verify_url.trim().replace("|","")
+                        let r = {
+                            "error_status": "",
+                            "invoice_number": invoice_number,
+                            "cu_serial_number": cu_serial,
+                            "cu_invoice_number": cu_invoice,
+                            "verify_url": verify_url,
+                            "description": "Invoice Signed Successfully"
+                        }
+        
+                        res.setHeader('Content-Type', 'application/json');
+                        res.send(r);
+                    }
+
+                    
+                })
                 
                 if (qr_image_path) {
                     var qrcode = verify_url;
@@ -522,15 +543,7 @@ app.get('/total_file', (req, res) => {
                           });
                     })    
                 }
-
-                res.setHeader('Content-Type', 'application/json');
-                    res.send({
-                        "invoice_number": invoice_number,
-                        "cu_serial_number": cu_serial,
-                        "cu_invoice_number": cu_invoice,
-                        "verify_url": verify_url,
-                        "description": "Invoice Signed Success"
-                });     
+    
             }
         })    
     }, print_delay)
