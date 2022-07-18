@@ -462,6 +462,7 @@ app.get('/total_file', (req, res) => {
     print_delay     = req.headers.printdelay ? parseInt(req.headers.printdelay) : 8000 
     qr_image_path   = req.headers.qrimagepath
     deviceno        = req.headers.deviceno
+    printhost       = req.headers.printhost
 
     file_path = path.join(import_location, `ok_${file_name}`)
     error_file_path = path.join(import_location, `err_${file_name}`)
@@ -481,8 +482,16 @@ app.get('/total_file', (req, res) => {
                     if (data) {
                         xml2js(data, (err, result) => {
                             if (result) {
-                                res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
-                                return
+                                var cancel_url = `${printhost}/CancelReceipt()`
+                                axios.get(cancel_url)
+                                .then(data => {
+                                    res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                                    return    
+                                })
+                                .catch(err => {
+                                    res.send({"error_status": `Error Code ${result.Res.$.Code} \n ${result.Res.Err[0].Message[0]}`})
+                                    return                                    
+                                })
                             } else {
                                 res.send({"error_status": String(err)})
                                 return
@@ -548,6 +557,134 @@ app.get('/total_file', (req, res) => {
         })    
     }, print_delay)
 
+})
+
+app.post('/novitus', (req, res) => {
+    payload = req.body
+    items = payload.items_list
+    led = payload.led_list
+    transaction_type = payload.vouchertype
+    if (payload.vouchertype == "Tax Invoice") {
+        transaction_type = "tax_invoice"
+    } else if (payload.vouchertype == "Credit Note") {
+        transaction_type = "credit_note_all"
+    } else if (payload.vouchertype == "Debit Note") {
+        transaction_type = "debit_note"
+    }
+
+    let item_array = []
+    if (items) {
+        for (const val of items) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "namePLU":val.stockitemname,
+                "taxRate":val.taxrate,
+                "unitPrice":val.rate,
+                "discount":val.discount,
+                "hsCode":hscode,
+                "quantity":val.qty,
+                "measureUnit":val.unit,
+                "vatClass":val.vatrateclass
+            }
+            item_array.push(item_detail)
+        }    
+    }
+    if (led) {
+        for (const val of led) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "namePLU":val.stockitemname,
+                "taxRate":val.taxrate,
+                "unitPrice":val.rate,
+                "discount":val.discount,
+                "hsCode":hscode,
+                "quantity":val.qty,
+                "measureUnit":val.unit,
+                "vatClass":val.vatrateclass
+            }
+            item_array.push(item_detail)
+        }
+    }
+
+    //payload.items_list = item_array
+    qr_image_path = payload.qr_image_path
+
+
+    let ace_req = {
+            deonItemDetails:item_array,
+            senderId:req.headers.senderid,
+            invoiceCategory:transaction_type,
+            traderSystemInvoiceNumber:payload.invoice_number,
+            relevantInvoiceNumber:payload.rel_doc_number,
+            pinOfBuyer:payload.customer_pin,
+            discount:String(payload.net_discount_total),
+            invoiceType:"Original",
+            exemptionNumber:payload.customer_exid,
+            totalInvoiceAmount:String(payload.grand_total),
+            systemUser:"User"
+        }
+           
+    const json = JSON.stringify(ace_req);
+
+    const options = {
+        headers: {
+            //'Authorization': req.headers.authorization,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Content-Length': JSON.stringify(ace_req).length
+        }
+    };
+
+    axios.post(req.headers.hostname, json, options)
+        .then((response) => {
+            if (response) {
+                current_date = new Date()
+                cu_date = current_date.toISOString()
+
+                let result = {
+                    "error_status": "",
+                    "invoice_number": response.data.traderSystemInvoiceNumber,
+                    "cu_serial_number": req.headers.deviceno  + " " + cu_date,
+                    "cu_invoice_number": response.data.controlCode,
+                    "verify_url": response.data.qrCode,
+                    "description": "Invoice Signed Successfully"
+                }
+
+                res.setHeader('Content-Type', 'application/json');
+                res.send(result);
+            }
+
+            if (qr_image_path) {
+                var qrcode = response.data.verificationUrl
+                var file_name = path.join(qr_image_path, `${response.data.controlCode}.png`);
+    
+                var qr_png = qr.image(qrcode, {type: 'png'});
+    
+                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+    
+                tempFile.on('open', function(fd) {
+                    Jimp.read(file_name, function (err, image) {
+                        if (err) {
+                        //   console.log(err)
+                        } else {
+                        image.write(path.join(qr_image_path, `${response.data.controlCode}.jpeg`));
+                        }
+                    });
+                })    
+            }
+        
+        }).catch(ex => {
+            // console.log(ex.response)
+            // console.log(ex.response.data['Error'].message)
+            let error = {
+                "error_status": ex.message,
+                "verify_url": "",
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.send(error);
+
+        });
 })
 
 
