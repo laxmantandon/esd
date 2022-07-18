@@ -19,10 +19,6 @@ app.set('Port', port)
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 
-var Tremol = require("./nodejs_tremol_loader").load([__dirname +"\\fp_core.js", __dirname +"\\fp.js"]);
-var fp = new Tremol.FP();
-
-
 app.get('/', (req, res) => res.send('ESD App Running'))
 
 app.post('/esd', (req, res) => {
