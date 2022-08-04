@@ -10,7 +10,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
-    "setup": "electron-builder"
+    "setup": "electron-builder --x64 --ia32"
   },
   "setup": {
     "appId": "esd.vaptechltd.co.ke",
@@ -69,6 +69,7 @@
     "https": "^1.0.0",
     "jimp": "^0.16.1",
     "localStorage": "^1.0.4",
+    "morgan": "^1.10.0",
     "qr-image": "^3.2.0",
     "qrcode": "^1.5.0",
     "request": "^2.81.0",

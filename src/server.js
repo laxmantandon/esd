@@ -8,7 +8,7 @@ const Jimp = require("jimp")
 const path = require('path')
 const fs = require('fs')
 const xml2js = require('xml2js').parseString
-
+const morgan = require('morgan')
 
 const host = "0.0.0.0"
 const port = "35040"
@@ -18,6 +18,9 @@ app.set('Port', port)
 
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
+
+var accessLogStream = fs.createWriteStream(path.join(__dirname, 'access.log'), { flags: 'a' })
+app.use(morgan(':req', { stream: accessLogStream }))
 
 app.get('/', (req, res) => res.send('ESD App Running'))
 
@@ -84,21 +87,27 @@ app.post('/esd', (req, res) => {
 
 
         }).catch(ex => {
-            if (ex['response']['data']) {
-                let err = ex['response']['data'];
-                if (typeof err == 'object') {
-                    res.setHeader('Content-Type', 'application/json');
-                    res.send(err);    
+            try {
+                if (ex['response']['data']) {
+                    let err = ex['response']['data'];
+                    if (typeof err == 'object') {
+                        res.setHeader('Content-Type', 'application/json');
+                        res.send(err);    
+                    } else {
+                        const error_message = JSON.stringify(err.replace(/\\/g, ""));
+                        const message = JSON.parse(error_message);
+                        res.setHeader('Content-Type', 'application/json');
+                        res.send(message);    
+                    }
                 } else {
-                    const error_message = JSON.stringify(err.replace(/\\/g, ""));
-                    const message = JSON.parse(error_message);
                     res.setHeader('Content-Type', 'application/json');
-                    res.send(message);    
+                    res.send({ "error_status" : "Unknown Error, Try Again"});    
                 }
-            } else {
+            } catch(e) {
                 res.setHeader('Content-Type', 'application/json');
-                res.send({ "error_status" : "Unknown Error, Try Again"});    
+                res.send({ "error_status" : "Unknown Error, Try Again", "error_message": String(e)});    
             }
+
         });
 })
 
@@ -162,6 +171,81 @@ app.get('/dtr', (req, res) => {
                 });        
             } else{
 
+                try {
+                    x = data.split(/\r?\n/)
+                    var cu_date = x.find(element => element.includes("DATE"));
+                    var cu_serial = x.find(element => element.includes("CUSN:"));
+                    cu_serial = cu_serial + "_" + cu_date.replace("|", "");
+                    cu_serial = cu_serial.trim().replace("CUSN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, "")
+                    var cu_invoice = x.find(element => element.includes("CUIN:"));
+                    cu_invoice = cu_invoice.trim().replace("CUIN:","").replace("|","").replace(/\s/g, '').replace(/\u0011/g, "")
+                    var verify_url = x.find(element => element.includes("https:"));
+                    verify_url = verify_url.trim().replace("|","")
+                    
+                    if (qr_image_path) {
+                        var qrcode = verify_url;
+                        var file_name = path.join(qr_image_path, `${cu_invoice}.png`);
+            
+                        var qr_png = qr.image(qrcode, {type: 'png'});
+            
+                        var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+            
+                        tempFile.on('open', function(fd) {
+                            Jimp.read(file_name, function (err, image) {
+                                if (err) {
+                                //   console.log(err)
+                                } else {
+                                  image.write(path.join(qr_image_path, `${cu_invoice}.jpeg`));
+                                }
+                              });
+                        })    
+                    }
+    
+                    res.setHeader('Content-Type', 'application/json');
+                        res.send({
+                            "invoice_number": invoice_number,
+                            "cu_serial_number": cu_serial,
+                            "cu_invoice_number": cu_invoice,
+                            "verify_url": verify_url,
+                            "description": "Invoice Signed Success"
+                    });     
+                } catch (error) {
+                    res.setHeader('Content-Type', 'application/json');
+                        res.send({
+                            "error_status": "Could not process invoice, check error log",
+                            "internal_error":String(err)
+                    });
+                    
+                }
+
+            }
+        })    
+    }, print_delay)
+
+})
+
+app.get('/dtr/read_response', (req, res) => {
+
+    export_location = req.headers.exportpath
+    import_location = req.headers.importpath
+    error_location  = req.headers.errorpath
+    file_name       = req.headers.filename
+    invoice_number  = req.headers.invoicenumber
+    print_delay     = req.headers.printdelay ? parseInt(req.headers.printdelay) : 8000 
+    qr_image_path   = req.headers.qrimagepath
+
+    file_path = path.join(import_location, `R_${file_name}`)
+    error_file_path = path.join(error_location, `R_${file_name}`)
+
+        fs.readFile(file_path, 'utf-8', function(err, data) {
+            if (err) {
+                res.setHeader('Content-Type', 'application/json');
+                res.send({
+                    "error_status": "Could not process invoice, check error log",
+                    "internal_error":String(err)
+                });        
+            } else{
+
                 x = data.split(/\r?\n/)
                 var cu_date = x.find(element => element.includes("DATE"));
                 var cu_serial = x.find(element => element.includes("CUSN:"));
@@ -200,10 +284,10 @@ app.get('/dtr', (req, res) => {
                         "description": "Invoice Signed Success"
                 });     
             }
-        })    
-    }, print_delay)
+        })
 
 })
+
 
 app.post('/ace', (req, res) => {
     payload = req.body

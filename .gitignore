@@ -91,3 +91,5 @@ out/
 dist/
 
 esd-win32-x64/
+
+.log
