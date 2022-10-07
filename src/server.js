@@ -647,7 +647,7 @@ app.post('/novitus', (req, res) => {
     if (payload.vouchertype == "Tax Invoice") {
         transaction_type = "tax_invoice"
     } else if (payload.vouchertype == "Credit Note") {
-        transaction_type = "credit_note_all"
+        transaction_type = "credit_note"
     } else if (payload.vouchertype == "Debit Note") {
         transaction_type = "debit_note"
     }
