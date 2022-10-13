@@ -20,7 +20,7 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
 
 var accessLogStream = fs.createWriteStream(path.join(__dirname, 'access.log'), { flags: 'a' })
-app.use(morgan(':req', { stream: accessLogStream }))
+app.use(morgan('combined', { stream: accessLogStream }))
 
 app.get('/', (req, res) => res.send('ESD App Running'))
 
@@ -287,7 +287,6 @@ app.get('/dtr/read_response', (req, res) => {
         })
 
 })
-
 
 app.post('/ace', (req, res) => {
     payload = req.body
@@ -766,6 +765,129 @@ app.post('/novitus', (req, res) => {
 
         });
 })
+
+app.post('/fiscat', (req, res) => {
+    payload = req.body
+    items = payload.items_list
+    led = payload.led_list
+    transaction_type = payload.vouchertype
+
+    let item_array = []
+    if (items) {
+        for (const val of items) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "Name":val.stockitemname,
+                "TaxRate":val.taxrate,
+                "UnitPrice":val.rate,
+                "DiscountType": "Discount",
+                "Discount":val.discount,
+                "HSCode":hscode,
+                "HSDesc":hscode,
+                "Quantity":val.qty,
+                "Category":val.vatrateclass
+            }
+            item_array.push(item_detail)
+        }    
+    }
+    if (led) {
+        for (const val of led) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "Name":val.stockitemname,
+                "TaxRate":val.taxrate,
+                "UnitPrice":val.rate,
+                "DiscountType": "Discount",
+                "Discount":val.discount,
+                "HSCode":hscode,
+                "HSDesc":hscode,
+                "Quantity":val.qty,
+                "Category":val.vatrateclass
+            }
+            item_array.push(item_detail)
+        }
+    }
+
+    //payload.items_list = item_array
+    qr_image_path = payload.qr_image_path
+
+
+    let ace_req = {
+            ItemDetails:item_array,
+            PINID:req.headers.pinid,
+            InvoiceCategory:transaction_type,
+            InvoiceNumber:payload.invoice_number,
+            PINOfBuyer:payload.customer_pin,
+            TotalAmount:String(payload.grand_total),
+            Payments : [
+                { PaidMode: "Credit", PaidAmount: String(payload.grand_total)}
+            ]
+            
+        }
+           
+    const json = JSON.stringify(ace_req);
+
+    const options = {
+        headers: {
+            //'Authorization': req.headers.authorization,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Content-Length': JSON.stringify(ace_req).length
+        }
+    };
+
+    axios.post(req.headers.hostname, json, options)
+        .then((response) => {
+            if (response) {
+                current_date = new Date()
+                cu_date = current_date.toISOString()
+
+                let result = {
+                    "error_status": "",
+                    "invoice_number": response.data.traderSystemInvoiceNumber,
+                    "cu_serial_number": req.headers.deviceno  + " " + cu_date,
+                    "cu_invoice_number": response.data.controlCode,
+                    "verify_url": response.data.qrCode,
+                    "description": "Invoice Signed Successfully"
+                }
+
+                res.setHeader('Content-Type', 'application/json');
+                res.send(result);
+            }
+
+            if (qr_image_path) {
+                var qrcode = response.data.verificationUrl
+                var file_name = path.join(qr_image_path, `${response.data.controlCode}.png`);
+    
+                var qr_png = qr.image(qrcode, {type: 'png'});
+    
+                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+    
+                tempFile.on('open', function(fd) {
+                    Jimp.read(file_name, function (err, image) {
+                        if (err) {
+                        //   console.log(err)
+                        } else {
+                        image.write(path.join(qr_image_path, `${response.data.controlCode}.jpeg`));
+                        }
+                    });
+                })    
+            }
+        
+        }).catch(ex => {
+            // console.log(ex.response)
+            // console.log(ex.response.data['Error'].message)
+            let error = {
+                "error_status": ex.message,
+                "verify_url": "",
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.send(error);
+
+        });
+})
+
 
 // server.listen(port, host, () => {
 //     console.log('Server Listening')
