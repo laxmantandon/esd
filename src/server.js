@@ -363,14 +363,34 @@ app.post('/ace', (req, res) => {
         .then((x) => {
             // console.log(x.data)
             if (x) {
-                let result = {
-                    "error_status": "",
-                    "invoice_number": x.data.Existing.TraderSystemInvoiceNumber,
-                    "cu_serial_number": payload.deviceno + " " + x.data.Existing.CommitedTimestamp,
-                    "cu_invoice_number": x.data.Existing.ControlCode,
-                    "verify_url": x.data.Existing.QRCode,
-                    "description": "Invoice Signed Successfully"
-                }
+                // let result = {
+                //     "error_status": "",
+                //     "invoice_number": x.data.Invoice.TraderSystemInvoiceNumber,
+                //     "cu_serial_number": payload.deviceno + " " + x.data.Invoice.CommitedTimestamp,
+                //     "cu_invoice_number": x.data.Invoice.ControlCode,
+                //     "verify_url": x.data.Invoice.QRCode,
+                //     "description": "Invoice Signed Successfully"
+                // }
+                let result;
+        if(x.data.Existing){
+          result = {
+            "error_status": "",
+            "invoice_number": x.data.Existing.TraderSystemInvoiceNumber,
+            "cu_serial_number": payload.deviceno + " " + x.data.Existing.CommitedTimestamp,
+            "cu_invoice_number": x.data.Existing.ControlCode,
+            "verify_url": x.data.Existing.QRCode,
+            "description": "Invoice Signed Successfully"
+          }
+        } else {
+          result = {
+            "error_status": "",
+            "invoice_number": x.data.Invoice.TraderSystemInvoiceNumber,
+            "cu_serial_number": payload.deviceno + " " + x.data.Invoice.CommitedTimestamp,
+            "cu_invoice_number": x.data.Invoice.ControlCode,
+            "verify_url": x.data.Invoice.QRCode,
+            "description": "Invoice Signed Successfully"
+          }
+        }
                 // var result = JSON.stringify(x.data.replace(/\\/g, ""));
                 // var result1 = JSON.parse(result);
                 // var result2 = JSON.parse(result1);
@@ -492,7 +512,8 @@ app.post('/datecs', (req, res) => {
                     "cu_serial_number": response.data.msn + " " + response.data.DateTime,
                     "cu_invoice_number": response.data.mtn,
                     "verify_url": response.data.verificationUrl,
-                    "description": "Invoice Signed Successfully"
+                    "description": "Invoice Signed Successfully",
+                    "payload": ace_req
                 }
 
                 res.setHeader('Content-Type', 'application/json');
@@ -524,6 +545,7 @@ app.post('/datecs', (req, res) => {
             let error = {
                 "error_status": ex.message,
                 "verify_url": "",
+                "payload": ace_req
             }
 
             res.setHeader('Content-Type', 'application/json');
