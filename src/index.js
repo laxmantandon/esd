@@ -1,15 +1,20 @@
-const { 
+const {
   app,
   Menu,
   Tray,
   nativeImage,
   BrowserWindow,
   dialog,
+  ipcMain,
+  ipcRenderer
 } = require('electron');
 
 const path = require('path');
+let process;
 
-const { app: express, server} = require('./server')
+// const { app: express } = require('./server')
+const { exec, fork } = require('child_process');
+const { default: axios } = require('axios');
 // const createWindow = () => {
 //   // Create the browser window.
 //   const mainWindow = new BrowserWindow({
@@ -31,6 +36,8 @@ const { app: express, server} = require('./server')
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
+
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
@@ -39,7 +46,7 @@ app.on('window-all-closed', () => {
 
 const createTray = () => {
   const iconPath = path.join(__dirname, "./icon/icon.png")
-  const trayIcon = nativeImage.createFromPath(iconPath).resize({width: 24, height: 24})
+  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 24, height: 24 })
   const tray = new Tray(trayIcon)
   const menuTemplate = [
     {
@@ -50,23 +57,31 @@ const createTray = () => {
       label: 'Start Server',
       enabled: true,
       click: () => {
-        server.listen(express.get('Port'), express.get('Host'), () => {
-          menuTemplate[1].enabled = false
-          menuTemplate[2].enabled = true
-          buildTrayMenu(menuTemplate)
-        })
+        try {
+          process = exec(' npm run start_process');
+        } catch (e) {
+
+        }
+        menuTemplate[1].enabled = false
+        menuTemplate[2].enabled = true
+        buildTrayMenu(menuTemplate)
+
+        // server.listen(express.get('Port'), express.get('Host'), () => {
+        //   menuTemplate[1].enabled = false
+        //   menuTemplate[2].enabled = true
+        //   buildTrayMenu(menuTemplate)
+        // })
       }
     },
     {
       label: 'Stop Server',
       enabled: false,
-      click: () => {
-        server.close(e => {
-          console.log('Connection Closed', e)
-          menuTemplate[1].enabled = true
-          menuTemplate[2].enabled = false
-          buildTrayMenu(menuTemplate)
-        })
+      click: () => {        
+        // Kill npm run start_process 
+        exec("npx kill-port 35040");
+        menuTemplate[1].enabled = true
+        menuTemplate[2].enabled = false
+        buildTrayMenu(menuTemplate)
       }
     },
     {
@@ -91,7 +106,7 @@ const createTray = () => {
   const buildTrayMenu = menu => {
     let lblStatus = "Inactive"
     let iconStatus = "./icon/stop.png"
-    if(!menu[1].enabled) {
+    if (!menu[1].enabled) {
       lblStatus = "Active"
       iconStatus = "./icon/start.png"
     }
@@ -99,19 +114,23 @@ const createTray = () => {
     const iconStatusPath = path.join(__dirname, iconStatus)
 
     menu[0].label = `"Service Status " ${lblStatus}`
-    menu[0].icon = nativeImage.createFromPath(iconStatusPath).resize({ width: 24, height: 24})
+    menu[0].icon = nativeImage.createFromPath(iconStatusPath).resize({ width: 24, height: 24 })
 
     const trayMenu = Menu.buildFromTemplate(menu)
-    tray.setContextMenu(trayMenu)  
+    tray.setContextMenu(trayMenu)
   }
 
   buildTrayMenu(menuTemplate)
+  process = exec('npm run start_process');
+  menuTemplate[1].enabled = false
+  menuTemplate[2].enabled = true
+  buildTrayMenu(menuTemplate)
 
-  server.listen(express.get('Port'), express.get('Host'), () => {
-    menuTemplate[1].enabled = false
-    menuTemplate[2].enabled = true
-    buildTrayMenu(menuTemplate)
-  })
+  // server.listen(express.get('Port'), express.get('Host'), () => {
+  //   // menuTemplate[1].enabled = false
+  //   // menuTemplate[2].enabled = true
+  //   // buildTrayMenu(menuTemplate)
+  // })
 
 }
 
@@ -125,9 +144,9 @@ app.on('activate', () => {
   }
 });
 
+
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
-
-app.on('quit', ()=> {
-  server.close()
+app.on('quit', () => {
+  process.kill();
 })

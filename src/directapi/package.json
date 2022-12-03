@@ -1,0 +1,16 @@
+{
+  "name": "use_this_folder_only_for_nodejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "fp.js",
+  "scripts": {
+    "start": "fp.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "localStorage": "^1.0.4",
+    "storage": "^0.2.0"
+  }
+}

@@ -1,15 +1,14 @@
+const http = require('http')
 const axios = require('axios')
 const express = require('express')
 const app = express()
+const server = http.createServer(app)
 const qr = require('qr-image')
 const Jimp = require("jimp")
 const path = require('path')
 const fs = require('fs')
 const xml2js = require('xml2js').parseString
 const morgan = require('morgan')
-
-var Tremol = require("./nodejs_tremol_loader").load([path.join(__dirname, "./directapi/fp_core.js"), path.join(__dirname, "./directapi/fp.js")]);
-var fp = Tremol.FP();
 
 const host = "0.0.0.0"
 const port = "35040"
@@ -23,7 +22,7 @@ app.use(express.urlencoded({ extended: false }))
 var accessLogStream = fs.createWriteStream(path.join(__dirname, 'access.log'), { flags: 'a' })
 app.use(morgan('combined', { stream: accessLogStream }))
 
-app.get('/', (req, res) => res.send('ESD App Running !!'))
+app.get('/', (req, res) => res.send('ESD App Running'))
 
 app.post('/esd', (req, res) => {
 
@@ -504,89 +503,101 @@ app.post('/datecs', (req, res) => {
         }
     };
 
-    var pin_url = req.headers.hostname.replace("invoices", "pin")
-    var pin_config = {
-        method: 'post',
-        url: pin_url,
-        headers: {
-            'Accept': 'text/plain',
-            'Content-Type': 'text/plain'
-        },
-        data: "0000"
-    };
-
-    axios(pin_config)
-        .then(function (response) {
-            axios.post(req.headers.hostname, json, options)
-            .then((response) => {
-                if (response) {
-                    let result = {
-                        "error_status": "",
-                        "invoice_number": payload.TraderSystemInvoiceNumber,
-                        "cu_serial_number": response.data.msn + " " + response.data.DateTime,
-                        "cu_invoice_number": response.data.mtn,
-                        "verify_url": response.data.verificationUrl,
-                        "description": "Invoice Signed Successfully",
-                        "payload": ace_req
-                    }
-    
-                    res.setHeader('Content-Type', 'application/json');
-                    res.send(result);
-                }
-    
-                // D:\TYPE C\ESDUtility\esd-master
-    
-                if (qr_image_path) {
-                    var qrcode = response.data.verificationUrl
-                    var file_name = path.join(qr_image_path, `${response.data.mtn}.png`);
-        
-                    var qr_png = qr.image(qrcode, {type: 'png'});
-        
-                    var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
-        
-                    tempFile.on('open', function(fd) {
-                        Jimp.read(file_name, function (err, image) {
-                            if (err) {
-                            //   console.log(err)
-                            } else {
-                            image.write(path.join(qr_image_path, `${response.data.mtn}.jpeg`));
-                            }
-                        });
-                    })    
-                }
-            
-            }).catch(ex => {
-                // console.log(ex.response)
-                // console.log(ex.response.data['Error'].message)
-                let error = {
-                    "error_status": ex.message,
-                    "verify_url": "",
+    axios.post(req.headers.hostname, json, options)
+        .then((response) => {
+            if (response) {
+                let result = {
+                    "error_status": "",
+                    "invoice_number": payload.TraderSystemInvoiceNumber,
+                    "cu_serial_number": response.data.msn + " " + response.data.DateTime,
+                    "cu_invoice_number": response.data.mtn,
+                    "verify_url": response.data.verificationUrl,
+                    "description": "Invoice Signed Successfully",
                     "payload": ace_req
                 }
-    
+
                 res.setHeader('Content-Type', 'application/json');
-                res.send(error);
+                res.send(result);
+            }
+
+            if (qr_image_path) {
+                var qrcode = response.data.verificationUrl
+                var file_name = path.join(qr_image_path, `${response.data.mtn}.png`);
     
-            });
-        })
-        .catch(function (error) {
-            let err = {
-                "error_status": "Pin Error",
+                var qr_png = qr.image(qrcode, {type: 'png'});
+    
+                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+    
+                tempFile.on('open', function(fd) {
+                    Jimp.read(file_name, function (err, image) {
+                        if (err) {
+                        //   console.log(err)
+                        } else {
+                        image.write(path.join(qr_image_path, `${response.data.mtn}.jpeg`));
+                        }
+                    });
+                })    
+            }
+        
+        }).catch(ex => {
+            // console.log(ex.response)
+            // console.log(ex.response.data['Error'].message)
+            let error = {
+                "error_status": ex.message,
                 "verify_url": "",
                 "payload": ace_req
             }
 
             res.setHeader('Content-Type', 'application/json');
-            res.send(err);
+            res.send(error);
+
         });
-    
-
-
-
-
-
-
 })
+
+app.post('/total', (req, res) => {
+
+  payload = req.body
+  items = payload.items_list
+  while (true) {
+    // fp.ServerSetSettings(payload.original);
+    // fp.ServerSetDeviceTcpSettings(payload.hostname, payload.port, payload.password);
+
+    fp.ServerSetSettings("http://localhost:4444/");
+    fp.ServerSetDeviceTcpSettings("196.207.19.130", 8000, "Password");
+    var device = fp.ServerFindDevice();
+    if (device) {
+      fp.ServerSetDeviceSerialSettings(device.serialPort, device.baudRate, false); //If FD is connected on serial port or USB
+      fp.PrintDiagnostics();
+    }
+    else {
+      console.log("Device not found");
+    }
+    try {
+      const status = fp.ReadStatus()
+      if (status) {
+        fp.OpenInvoiceWithFreeCustomerData("", payload.customer_pin, "", "", "", "", "", "")
+        for (const val of items) {
+          let hscode = val.hscode ? val.hscode : " "
+
+          fp.SellPLUfromExtDB(val.stockitemname, Tremol.Enums.OptionVATClass.VAT_Class_A, val.rate, " ", hscode, " ", 16, val.qty, 0);
+          console.log(val.stockitemname, Tremol.Enums.OptionVATClass.VAT_Class_A, val.rate, " ", hscode, " ", 16, val.qty, 0);
+        }
+        const close = fp.CloseReceipt()
+        const dateTime = fp.ReadDateTime()
+        console.log(close, dateTime)
+        var response = { close, dateTime }
+        res.json(response)
+        break;
+      }
+    }
+    catch (error) {
+      console.log(error);
+
+    }
+  }
+}
+
+)
 
 app.get('/total_file', (req, res) => {
 
@@ -943,218 +954,12 @@ app.post('/fiscat', (req, res) => {
 
         });
 })
-//novitus - computech
-app.post('/invoice', (req, res) => {
-    const payload = req.body;
-    let data = []
-    let { 
-        items_list, led_list, customer_pin, sel_currency, net_discount_total, 
-        invoice_number, grand_total, tax_total 
-    } = payload;
-    let { posid, registrationID } = req.headers;
-    const items = items_list?.map(item => {
-        return {
-            "code": item.hscode ? item.hscode : "",
-            "hs": item.hscode ? item.hscode : "",
-            "description" : "",	
-            "ean" : "",	
-            "invoicedQuantity" : item.qty,	
-            "price" : item.rate,	
-            "total" : item.amt,	
-            "taxCode" : "",	
-            "discount":item.discount,
-        }
-    });
 
 
-    const led_items = led_list?.map(item => {
-        return {
-            "code": item.hscode ? item.hscode : "",
-            "hs": item.hscode ? item.hscode : "",
-            "description" : "",	
-            "ean" : "",	
-            "invoicedQuantity" : item.qty,	
-            "price" : item.rate,	
-            "total" : item.amt,	
-            "taxCode" : "",	
-            "discount":item.discount,
-        }
-    });
+// server.listen(port, host, () => {
+//     console.log('Server Listening')
+// })
 
-    let buyer = {
-        "taxIdentificationNumber": customer_pin,
-        "registrationName": ""
-    }
-
-    let items_arr = items ? items: []
-    let led_items_arr = led_items ? led_items: []
-
-    data.push({
-        "transactionID": "",
-        "posID": posid,
-        "registrationID" : registrationID,	
-        "issueDate" : "",	
-        "issueTime" : "",	
-        "transactionTypeCode" : 1,	
-        "currencyCode" : sel_currency,	
-        "invoiceDocumentReference" : invoice_number,
-        "buyer": buyer,
-        "instructionNote" : "",	
-        "discountAmount" : net_discount_total,	
-        "taxExclusiveAmount" : grand_total - tax_total,	
-        "taxInclusiveAmount" : grand_total,	
-        "cashier1" : "name",		
-        "items": [...items_arr, ...led_items_arr],
-        "tax" : {	
-            "vatNetAmount" : tax_total,	
-            "vatTaxAmount" : tax_total,	
-            "zeroRatedNetAmount" : 0,	
-            "exemptNetAmount" : net_discount_total,
-            "tax4NetAmount" : grand_total,
-            "tax4TaxAmount" : grand_total
-        }
-    });
-
-    const options = {
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'RequestId': req.headers.requestid,
-            'Content-Length': JSON.stringify(data).length
-        }
-    };
-
-    axios.post(req.headers.hostname, JSON.stringify(data), options)
-    .then(response => {
-        res.setHeader('Content-Type', 'application/json');
-        res.send(response.data);
-    })
-    .catch(err => {
-        let error = {
-            "error_status": err.message,
-            "verify_url": "",
-        }
-        res.setHeader('Content-Type', 'application/json');
-        res.send(error);
-    });
-});
-
-// Totals route added
-app.post('/total_api', (req, res) => {
-    payload = req.body
-    items = payload.items_list
-    led = payload.led_list
-
-    let trials = 0;
-
-    try{
-        fp.ServerSetSettings(req.headers.printhost);
-        fp.ServerSetDeviceTcpSettings(req.headers.ip, req.headers.port, req.headers.pw);
-
-        while(true){
-            if(trials == 30){
-                res.send({"msg": "Device not found"})
-            }else{
-                var device = fp.ServerFindDevice();
-                if (device) {
-                    fp.ServerSetDeviceSerialSettings(device.serialPort, device.baudRate, false); //If FD is connected on serial port or USB
-                    fp.PrintDiagnostics();
-                    try {
-                        const status = fp.ReadStatus()
-                        if (status) {
-                        fp.OpenInvoiceWithFreeCustomerData("",  payload.customer_pin, "", "", "", payload.customer_exid, payload.rel_doc_number, payload.invoice_number)
-                        for (const val of items) {
-                            let hscode = val.hscode ? val.hscode : " "
-                
-                            fp.SellPLUfromExtDB(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-                            console.log(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-                        }
-                        
-                        for (const val of led) {
-                            let hscode = val.hscode ? val.hscode : " "
-                
-                            fp.SellPLUfromExtDB(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-                            console.log(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-                        }
-                
-                        const close = fp.CloseReceipt()
-                        const dateTime = fp.ReadDateTime()
-                        console.log(close, dateTime)
-                        var response = { close, dateTime }
-                        res.json(response)
-                        }
-                    }
-                    catch (error) {
-                        console.log(error);
-                
-                    }
-                }else{
-                    trials += 1
-                }
-            }
-        };
-
-    }catch( error) {
-        res.send({"msg": "Please restart ZFserver"})
-    }
-
-    // while (true) {
-    //   fp.ServerSetSettings(req.headers.printhost);
-    // //   fp.ServerSetSettings("http://localhost:4444/");
-    //   fp.ServerSetDeviceTcpSettings(req.headers.ip, req.headers.port, req.headers.pw);
-    // //   fp.ServerSetDeviceTcpSettings("196.207.19.131", 8000, "Password");
-    //   var device = fp.ServerFindDevice();
-    //   if (device) {
-    //     fp.ServerSetDeviceSerialSettings(device.serialPort, device.baudRate, false); //If FD is connected on serial port or USB
-    //     fp.PrintDiagnostics();
-    //   } else {
-    //     console.log("Device not found");
-
-    //   }
-    //   try {
-    //     const status = fp.ReadStatus()
-    //     if (status) {
-    //       fp.OpenInvoiceWithFreeCustomerData("",  payload.customer_pin, "", "", "", payload.customer_exid, payload.rel_doc_number, payload.invoice_number)
-    //       for (const val of items) {
-    //         let hscode = val.hscode ? val.hscode : " "
-  
-    //         fp.SellPLUfromExtDB(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-    //         console.log(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-    //       }
-          
-    //       for (const val of led) {
-    //         let hscode = val.hscode ? val.hscode : " "
-  
-    //         fp.SellPLUfromExtDB(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-    //         console.log(val.stockitemname, val.vatclass, val.rate, " ", hscode, " ", val.taxrate, val.qty, 0);
-    //       }
-
-    //       const close = fp.CloseReceipt()
-    //       const dateTime = fp.ReadDateTime()
-    //       console.log(close, dateTime)
-    //       var response = { close, dateTime }
-    //       res.json(response)
-    //       break;
-    //     }
-    //   }
-    //   catch (error) {
-    //     console.log(error);
-  
-    //   }
-    // }
-});
-
-let server = app.listen(port, host, () => {
-    console.log('Server Listening')
-});
-
-app.get("/stop", (req, res) => {
-    server.close(() => {
-        console.log("Done");
-    })
-    res.send({msg: "Closed .."})
-});
-
-// module.exports = {
-//     app
-// }
+module.exports = {
+    app, server
+}

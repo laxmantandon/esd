@@ -3,14 +3,17 @@
   "productName": "esd",
   "version": "1.0.0",
   "description": "eSign utility Application",
-  "main": "src/index.js",
+  "main": "src/electron.js",
   "scripts": {
+    "start_process": "node src/server.js",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
-    "setup": "electron-builder --x64 --ia32"
+    "setup": "electron-builder --x64 --ia32",
+    "dev": "electron src/index.js",
+    "build": "concurrently \"npm run start_process\" \"npm run dev\""
   },
   "setup": {
     "appId": "esd.vaptechltd.co.ke",
@@ -64,6 +67,7 @@
   "dependencies": {
     "auto-launch": "^5.0.5",
     "axios": "^0.27.2",
+    "concurrently": "^7.6.0",
     "electron-squirrel-startup": "^1.0.0",
     "express": "^4.18.1",
     "https": "^1.0.0",
