@@ -517,57 +517,75 @@ app.post('/datecs', (req, res) => {
 
     axios(pin_config)
         .then(function (response) {
-            axios.post(req.headers.hostname, json, options)
-            .then((response) => {
-                if (response) {
-                    let result = {
-                        "error_status": "",
-                        "invoice_number": payload.TraderSystemInvoiceNumber,
-                        "cu_serial_number": response.data.msn + " " + response.data.DateTime,
-                        "cu_invoice_number": response.data.mtn,
-                        "verify_url": response.data.verificationUrl,
-                        "description": "Invoice Signed Successfully",
+            if (response.data != "0100") {
+                let err = {
+                    "error_status": "Device Not Connected / Pin Error"
+                }
+                res.setHeader('Content-Type', 'application/json');
+                res.send(err);
+            } else {
+
+                axios.post(req.headers.hostname, json, options)
+                .then((response) => {
+                    if (response.data.msn) {
+                        let result = {
+                            "error_status": "",
+                            "invoice_number": payload.TraderSystemInvoiceNumber,
+                            "cu_serial_number": response.data.msn + " " + response.data.DateTime,
+                            "cu_invoice_number": response.data.mtn,
+                            "verify_url": response.data.verificationUrl,
+                            "description": "Invoice Signed Successfully",
+                            "payload": ace_req
+                        }
+        
+                        res.setHeader('Content-Type', 'application/json');
+                        res.send(result);
+                    } else {
+                        let err = {
+                            "error_status": response.data.message,
+                            "payload": ace_req
+                        }
+                        res.setHeader('Content-Type', 'application/json');
+                        res.send(err);
+                        return
+                    }
+        
+                    // D:\TYPE C\ESDUtility\esd-master
+        
+                    if (qr_image_path) {
+                        var qrcode = response.data.verificationUrl
+                        var file_name = path.join(qr_image_path, `${response.data.mtn}.png`);
+            
+                        var qr_png = qr.image(qrcode, {type: 'png'});
+            
+                        var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+            
+                        tempFile.on('open', function(fd) {
+                            Jimp.read(file_name, function (err, image) {
+                                if (err) {
+                                //   console.log(err)
+                                } else {
+                                image.write(path.join(qr_image_path, `${response.data.mtn}.jpeg`));
+                                }
+                            });
+                        })    
+                    }
+                
+                }).catch(ex => {
+                    // console.log(ex.response)
+                    // console.log(ex.response.data['Error'].message)
+                    let error = {
+                        "error_status": ex.message,
+                        "verify_url": "",
                         "payload": ace_req
                     }
-    
+        
                     res.setHeader('Content-Type', 'application/json');
-                    res.send(result);
-                }
-    
-                // D:\TYPE C\ESDUtility\esd-master
-    
-                if (qr_image_path) {
-                    var qrcode = response.data.verificationUrl
-                    var file_name = path.join(qr_image_path, `${response.data.mtn}.png`);
+                    res.send(error);
         
-                    var qr_png = qr.image(qrcode, {type: 'png'});
-        
-                    var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
-        
-                    tempFile.on('open', function(fd) {
-                        Jimp.read(file_name, function (err, image) {
-                            if (err) {
-                            //   console.log(err)
-                            } else {
-                            image.write(path.join(qr_image_path, `${response.data.mtn}.jpeg`));
-                            }
-                        });
-                    })    
-                }
-            
-            }).catch(ex => {
-                // console.log(ex.response)
-                // console.log(ex.response.data['Error'].message)
-                let error = {
-                    "error_status": ex.message,
-                    "verify_url": "",
-                    "payload": ace_req
-                }
-    
-                res.setHeader('Content-Type', 'application/json');
-                res.send(error);
-    
-            });
+                });
+            }
+
         })
         .catch(function (error) {
             let err = {
