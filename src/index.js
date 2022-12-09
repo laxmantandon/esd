@@ -5,16 +5,14 @@ const {
   nativeImage,
   BrowserWindow,
   dialog,
-  ipcMain,
-  ipcRenderer
 } = require('electron');
 
 const path = require('path');
-let process;
+// let process;
 
-// const { app: express } = require('./server')
-const { exec, fork } = require('child_process');
-const { default: axios } = require('axios');
+const { app: express, server } = require('./server')
+// const { exec, fork } = require('child_process');
+// const { default: axios } = require('axios');
 // const createWindow = () => {
 //   // Create the browser window.
 //   const mainWindow = new BrowserWindow({
@@ -57,31 +55,39 @@ const createTray = () => {
       label: 'Start Server',
       enabled: true,
       click: () => {
-        try {
-          process = exec(' npm run start_process');
-        } catch (e) {
+        // try {
+        //   process = exec(' npm run start_process');
+        // } catch (e) {
 
-        }
-        menuTemplate[1].enabled = false
-        menuTemplate[2].enabled = true
-        buildTrayMenu(menuTemplate)
+        // }
+        // menuTemplate[1].enabled = false
+        // menuTemplate[2].enabled = true
+        // buildTrayMenu(menuTemplate)
 
-        // server.listen(express.get('Port'), express.get('Host'), () => {
-        //   menuTemplate[1].enabled = false
-        //   menuTemplate[2].enabled = true
-        //   buildTrayMenu(menuTemplate)
-        // })
+        server.listen(express.get('Port'), express.get('Host'), () => {
+          menuTemplate[1].enabled = false
+          menuTemplate[2].enabled = true
+          buildTrayMenu(menuTemplate)
+        })
       }
     },
     {
       label: 'Stop Server',
       enabled: false,
-      click: () => {        
+      click: () => {   
+        
+        server.close(e => {
+          console.log('Connection Closed', e)
+          menuTemplate[1].enabled = true
+          menuTemplate[2].enabled = false
+          buildTrayMenu(menuTemplate)
+        })
+
         // Kill npm run start_process 
-        exec("npx kill-port 35040");
-        menuTemplate[1].enabled = true
-        menuTemplate[2].enabled = false
-        buildTrayMenu(menuTemplate)
+        // exec("npx kill-port 35040");
+        // menuTemplate[1].enabled = true
+        // menuTemplate[2].enabled = false
+        // buildTrayMenu(menuTemplate)
       }
     },
     {
@@ -121,16 +127,17 @@ const createTray = () => {
   }
 
   buildTrayMenu(menuTemplate)
-  process = exec('npm run start_process');
-  menuTemplate[1].enabled = false
-  menuTemplate[2].enabled = true
-  buildTrayMenu(menuTemplate)
 
-  // server.listen(express.get('Port'), express.get('Host'), () => {
-  //   // menuTemplate[1].enabled = false
-  //   // menuTemplate[2].enabled = true
-  //   // buildTrayMenu(menuTemplate)
-  // })
+  // process = exec('npm run start_process');
+  // menuTemplate[1].enabled = false
+  // menuTemplate[2].enabled = true
+  // buildTrayMenu(menuTemplate)
+
+  server.listen(express.get('Port'), express.get('Host'), () => {
+    menuTemplate[1].enabled = false
+    menuTemplate[2].enabled = true
+    buildTrayMenu(menuTemplate)
+  })
 
 }
 
@@ -148,5 +155,6 @@ app.on('activate', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 app.on('quit', () => {
-  process.kill();
+  server.close()
+  // process.kill();
 })

@@ -1,6 +1,8 @@
+const http = require('http')
 const axios = require('axios')
 const express = require('express')
 const app = express()
+const server = http.createServer(app)
 const qr = require('qr-image')
 const Jimp = require("jimp")
 const path = require('path')
@@ -8,8 +10,8 @@ const fs = require('fs')
 const xml2js = require('xml2js').parseString
 const morgan = require('morgan')
 
-var Tremol = require("./nodejs_tremol_loader").load([path.join(__dirname, "./directapi/fp_core.js"), path.join(__dirname, "./directapi/fp.js")]);
-var fp = Tremol.FP();
+// var Tremol = require("./nodejs_tremol_loader").load([path.join(__dirname, "./directapi/fp_core.js"), path.join(__dirname, "./directapi/fp.js")]);
+// var fp = Tremol.FP();
 
 const host = "0.0.0.0"
 const port = "35040"
@@ -452,9 +454,10 @@ app.post('/datecs', (req, res) => {
             let hscode = val.hscode ? val.hscode : ""
             let item_detail = {
                 "name": val.stockitemname,
-                "unitPrice": val.rate,
-                "hsCode": hscode,
-                "quantity": val.qty
+                "quantity": Number(val.qty),
+                "unitPrice": Number(val.rate),
+                "totalAmount": Number(val.amt),
+                "hsCode": hscode
             }
             item_array.push(item_detail)
         }    
@@ -464,9 +467,10 @@ app.post('/datecs', (req, res) => {
             let hscode = val.hscode ? val.hscode : ""
             let item_detail = {
                 "name": val.stockitemname,
-                "unitPrice": val.rate,
-                "hsCode": hscode,
-                "quantity": val.qty
+                "quantity": Number(val.qty),
+                "unitPrice": Number(val.rate),
+                "totalAmount": Number(val.amt),
+                "hsCode": hscode
             }
             item_array.push(item_detail)
         }
@@ -474,23 +478,35 @@ app.post('/datecs', (req, res) => {
 
     //payload.items_list = item_array
     qr_image_path = payload.qr_image_path
-
+    let buyer = ""
+    if (payload.customer_pin == "" || payload.customer_pin == undefined) {
+        buyer = {
+            buyerName: payload.partyname,
+            buyerAddress: payload.address ? payload.address : " ",
+            buyerPhone: " "
+        }
+    } else {
+        buyer = {
+            buyerName: payload.partyname,
+            pinOfBuyer: payload.customer_pin ? payload.customer_pin : " ",
+            buyerAddress: payload.address ? payload.address : " ",
+            buyerPhone: " "
+        }
+    }
 
     let ace_req = {
         invoiceType: 0,
         transactionType: transaction_type,
         cashier: "name",
-        buyer: {
-            pinOfBuyer: payload.customer_pin
-        },
-        items: item_array,
-        payment: {
-            amount: payload.grand_total,
-
-        },
-        relevantNumber: payload.rel_doc_number? payload.rel_doc_number : "",
         TraderSystemInvoiceNumber: payload.invoice_number,
-        ExemptionNumber: payload.customer_exid ? payload.customer_exid : ""        
+        buyer: buyer,
+        items: item_array,
+        payment: [{
+            amount: Number(payload.grand_total),
+            paymentType: 0
+        }],
+        relevantNumber: payload.rel_doc_number? payload.rel_doc_number : ""
+        // ExemptionNumber: payload.customer_exid ? payload.customer_exid : ""        
     }
     const json = JSON.stringify(ace_req);
 
@@ -516,8 +532,8 @@ app.post('/datecs', (req, res) => {
     };
 
     axios(pin_config)
-        .then(function (response) {
-            if (response.data != "0100") {
+        .then(function (pin_response) {
+            if (pin_response.data != "0100") {
                 let err = {
                     "error_status": "Device Not Connected / Pin Error"
                 }
@@ -530,7 +546,7 @@ app.post('/datecs', (req, res) => {
                     if (response.data.msn) {
                         let result = {
                             "error_status": "",
-                            "invoice_number": payload.TraderSystemInvoiceNumber,
+                            "invoice_number": payload.invoice_number,
                             "cu_serial_number": response.data.msn + " " + response.data.DateTime,
                             "cu_invoice_number": response.data.mtn,
                             "verify_url": response.data.verificationUrl,
@@ -961,114 +977,16 @@ app.post('/fiscat', (req, res) => {
 
         });
 })
-//novitus - computech
-app.post('/invoice', (req, res) => {
-    const payload = req.body;
-    let data = []
-    let { 
-        items_list, led_list, customer_pin, sel_currency, net_discount_total, 
-        invoice_number, grand_total, tax_total 
-    } = payload;
-    let { posid, registrationID } = req.headers;
-    const items = items_list?.map(item => {
-        return {
-            "code": item.hscode ? item.hscode : "",
-            "hs": item.hscode ? item.hscode : "",
-            "description" : "",	
-            "ean" : "",	
-            "invoicedQuantity" : item.qty,	
-            "price" : item.rate,	
-            "total" : item.amt,	
-            "taxCode" : "",	
-            "discount":item.discount,
-        }
-    });
-
-
-    const led_items = led_list?.map(item => {
-        return {
-            "code": item.hscode ? item.hscode : "",
-            "hs": item.hscode ? item.hscode : "",
-            "description" : "",	
-            "ean" : "",	
-            "invoicedQuantity" : item.qty,	
-            "price" : item.rate,	
-            "total" : item.amt,	
-            "taxCode" : "",	
-            "discount":item.discount,
-        }
-    });
-
-    let buyer = {
-        "taxIdentificationNumber": customer_pin,
-        "registrationName": ""
-    }
-
-    let items_arr = items ? items: []
-    let led_items_arr = led_items ? led_items: []
-
-    data.push({
-        "transactionID": "",
-        "posID": posid,
-        "registrationID" : registrationID,	
-        "issueDate" : "",	
-        "issueTime" : "",	
-        "transactionTypeCode" : 1,	
-        "currencyCode" : sel_currency,	
-        "invoiceDocumentReference" : invoice_number,
-        "buyer": buyer,
-        "instructionNote" : "",	
-        "discountAmount" : net_discount_total,	
-        "taxExclusiveAmount" : grand_total - tax_total,	
-        "taxInclusiveAmount" : grand_total,	
-        "cashier1" : "name",		
-        "items": [...items_arr, ...led_items_arr],
-        "tax" : {	
-            "vatNetAmount" : tax_total,	
-            "vatTaxAmount" : tax_total,	
-            "zeroRatedNetAmount" : 0,	
-            "exemptNetAmount" : net_discount_total,
-            "tax4NetAmount" : grand_total,
-            "tax4TaxAmount" : grand_total
-        }
-    });
-
-    const options = {
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'RequestId': req.headers.requestid,
-            'Content-Length': JSON.stringify(data).length
-        }
-    };
-
-    axios.post(req.headers.hostname, JSON.stringify(data), options)
-    .then(response => {
-        res.setHeader('Content-Type', 'application/json');
-        res.send(response.data);
-    })
-    .catch(err => {
-        let error = {
-            "error_status": err.message,
-            "verify_url": "",
-        }
-        res.setHeader('Content-Type', 'application/json');
-        res.send(error);
-    });
-});
 
 // Totals route added
 app.post('/total_api', (req, res) => {
     payload = req.body
     items = payload.items_list
     led = payload.led_list
-
     let trials = 0;
-
     try{
         fp.ServerSetSettings(req.headers.printhost);
         fp.ServerSetDeviceTcpSettings(req.headers.ip, req.headers.port, req.headers.pw);
-
         while(true){
             if(trials == 30){
                 res.send({"msg": "Device not found"})
@@ -1162,17 +1080,10 @@ app.post('/total_api', (req, res) => {
     // }
 });
 
-let server = app.listen(port, host, () => {
-    console.log('Server Listening')
-});
+// let server = app.listen(port, host, () => {
+//     console.log('Server Listening')
+// });
 
-app.get("/stop", (req, res) => {
-    server.close(() => {
-        console.log("Done");
-    })
-    res.send({msg: "Closed .."})
-});
-
-// module.exports = {
-//     app
-// }
+module.exports = {
+    app, server
+}
