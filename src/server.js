@@ -873,7 +873,7 @@ app.post('/fiscat', (req, res) => {
                 "DiscountType": "Discount",
                 "Discount":Number(val.discount),
                 "HSCode":hscode,
-                "HSDesc":hscode,
+                "HSDesc":hscode.replace(".", ""),
                 "Quantity":Number(val.qty),
                 "Category":val.vatrateclass,
                 "TotalAmount": Number(val.amt)
@@ -891,7 +891,7 @@ app.post('/fiscat', (req, res) => {
                 "DiscountType": "Discount",
                 "Discount":Number(val.discount),
                 "HSCode":hscode,
-                "HSDesc":hscode,
+                "HSDesc":hscode.replace(".", ""),
                 "Quantity":Number(val.qty),
                 "Category":val.vatrateclass,
                 "TotalAmount": Number(val.amt)
