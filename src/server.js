@@ -806,7 +806,7 @@ app.post('/novitus', (req, res) => {
 
     axios.post(req.headers.hostname, json, options)
         .then((response) => {
-            if (response) {
+            if (response.data.statusCode == "0") {
                 current_date = new Date()
                 cu_date = current_date.toISOString()
 
@@ -821,25 +821,25 @@ app.post('/novitus', (req, res) => {
 
                 res.setHeader('Content-Type', 'application/json');
                 res.send(result);
-            }
 
-            if (qr_image_path) {
-                var qrcode = response.data.verificationUrl
-                var file_name = path.join(qr_image_path, `${response.data.controlCode}.png`);
-    
-                var qr_png = qr.image(qrcode, {type: 'png'});
-    
-                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
-    
-                tempFile.on('open', function(fd) {
-                    Jimp.read(file_name, function (err, image) {
-                        if (err) {
-                        //   console.log(err)
-                        } else {
-                        image.write(path.join(qr_image_path, `${response.data.controlCode}.jpeg`));
-                        }
-                    });
-                })    
+                if (qr_image_path) {
+                    var qrcode = response.data.verificationUrl
+                    var file_name = path.join(qr_image_path, `${response.data.controlCode}.png`);
+        
+                    var qr_png = qr.image(qrcode, {type: 'png'});
+        
+                    var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+        
+                    tempFile.on('open', function(fd) {
+                        Jimp.read(file_name, function (err, image) {
+                            if (err) {
+                            //   console.log(err)
+                            } else {
+                            image.write(path.join(qr_image_path, `${response.data.controlCode}.jpeg`));
+                            }
+                        });
+                    })    
+                }
             }
         
         }).catch(ex => {
@@ -868,14 +868,15 @@ app.post('/fiscat', (req, res) => {
             let hscode = val.hscode ? val.hscode : ""
             let item_detail = {
                 "Name":val.stockitemname,
-                "TaxRate":val.taxrate,
-                "UnitPrice":val.rate,
+                "TaxRate":Number(val.taxrate),
+                "UnitPrice":Number(val.rate),
                 "DiscountType": "Discount",
-                "Discount":val.discount,
+                "Discount":Number(val.discount),
                 "HSCode":hscode,
                 "HSDesc":hscode,
-                "Quantity":val.qty,
-                "Category":val.vatrateclass
+                "Quantity":Number(val.qty),
+                "Category":val.vatrateclass,
+                "TotalAmount": Number(val.amt)
             }
             item_array.push(item_detail)
         }    
@@ -885,14 +886,15 @@ app.post('/fiscat', (req, res) => {
             let hscode = val.hscode ? val.hscode : ""
             let item_detail = {
                 "Name":val.stockitemname,
-                "TaxRate":val.taxrate,
-                "UnitPrice":val.rate,
+                "TaxRate":Number(val.taxrate),
+                "UnitPrice":Number(val.rate),
                 "DiscountType": "Discount",
-                "Discount":val.discount,
+                "Discount":Number(val.discount),
                 "HSCode":hscode,
                 "HSDesc":hscode,
-                "Quantity":val.qty,
-                "Category":val.vatrateclass
+                "Quantity":Number(val.qty),
+                "Category":val.vatrateclass,
+                "TotalAmount": Number(val.amt)
             }
             item_array.push(item_detail)
         }
@@ -908,12 +910,16 @@ app.post('/fiscat', (req, res) => {
             InvoiceCategory:transaction_type,
             InvoiceNumber:payload.invoice_number,
             PINOfBuyer:payload.customer_pin,
-            TotalAmount:String(payload.grand_total),
+            TotalAmount:Number(payload.grand_total),
             Payments : [
-                { PaidMode: "Credit", PaidAmount: String(payload.grand_total)}
+                { PaidMode: "Credit", PaidAmount: Number(payload.grand_total)}
             ]
             
         }
+    
+    if (transaction_type == "Credit Note") {
+        ace_req.RelevantInvoiceNumber = payload.rel_doc_number
+    }
            
     const json = JSON.stringify(ace_req);
 
@@ -928,17 +934,28 @@ app.post('/fiscat', (req, res) => {
 
     axios.post(req.headers.hostname, json, options)
         .then((response) => {
-            if (response) {
+            if (response.data.status > 0) {
+
+                let error = {
+                    "error_status": response.data.description,
+                    "verify_url": "",
+                    "request": ace_req
+                }
+    
+                res.setHeader('Content-Type', 'application/json');
+                res.send(error);
+
+            } else {
                 current_date = new Date()
                 cu_date = current_date.toISOString()
 
                 let result = {
                     "error_status": "",
-                    "invoice_number": response.data.traderSystemInvoiceNumber,
-                    "cu_serial_number": req.headers.deviceno  + " " + cu_date,
-                    "cu_invoice_number": response.data.controlCode,
-                    "verify_url": response.data.qrCode,
-                    "description": "Invoice Signed Successfully"
+                    "invoice_number": payload.invoice_number,
+                    "cu_serial_number": response.data["cu serial number"],
+                    "cu_invoice_number": response.data["cu invoice number"],
+                    "verify_url": response.data["Qrcode"],
+                    "description": response.data["description"]
                 }
 
                 res.setHeader('Content-Type', 'application/json');
