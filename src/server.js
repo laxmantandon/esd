@@ -1097,6 +1097,141 @@ app.post('/total_api', (req, res) => {
     // }
 });
 
+app.post('/ACLAS', (req, res) => {
+    payload = req.body
+    items = payload.items_list
+    led = payload.led_list
+
+    let item_array = []
+    if (items) {
+        for (const val of items) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "productCode":hscode == undefined || hscode == ''? '00' : hscode,
+                "productDesc": val.stockitemname,
+                "taxtype":Number(val.taxrate),
+                "unitPrice":Number(val.rate),
+                "discount":Number(val.discount),
+                "quantity":Number(val.qty)
+            }
+            item_array.push(item_detail)
+        }    
+    }
+    if (led) {
+        for (const val of led) {
+            let hscode = val.hscode ? val.hscode : ""
+            let item_detail = {
+                "productCode":hscode == undefined || hscode == ''? '00' : hscode,
+                "productDesc": val.stockitemname,
+                "taxtype":Number(val.taxrate),
+                "unitPrice":Number(val.rate),
+                "discount":Number(val.discount),
+                "quantity":Number(val.qty)
+            }
+            item_array.push(item_detail)
+        }
+    }
+
+    //payload.items_list = item_array
+    qr_image_path = payload.qr_image_path
+
+    let ace_req = {
+        saleType: payload.vouchertype,
+        cuin: "",
+        till: 1,
+        rctNo: payload.invoice_number,
+        total: payload.grand_total,
+        Paid: payload.grand_total,
+        Payment: "Cash",
+        CustomerPIN: payload.customer_pin,
+        VAT_A_Net: payload.vat_a_net == undefined || payload.vat_a_net == "" ? 0 : payload.vat_a_net,
+        VAT_A: payload.vat_a == undefined || payload.vat_a== "" ? 0 : payload.vat_a,
+        VAT_B_Net: payload.vatb_net == undefined || payload.vatb_net== "" ? 0 : payload.vatb_net,
+        VAT_B: payload.vat_b == undefined || payload.vat_b== "" ? 0 : payload.vat_b,
+        VAT_E_Net: payload.vat_e_net == undefined || payload.vat_e_net== "" ? 0 : payload.vat_e_net,
+        VAT_E: payload.vat_e == undefined || payload.vat_e== "" ? 0 : payload.vat_e,
+        VAT_F_Net: payload.vat_f_net == undefined || payload.vat_f_net== "" ? 0 : payload.vat_f_net,
+        VAT_F: payload.vat_f == undefined || payload.vat_f== "" ? 0 : payload.vat_f,
+        data:item_array
+        }
+    
+    if (payload.vouchertype == "Credit Note") {
+        ace_req.cuin = payload.rel_doc_number
+    }
+           
+    const json = JSON.stringify(ace_req);
+
+    const options = {
+        headers: {
+            //'Authorization': req.headers.authorization,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Content-Length': JSON.stringify(ace_req).length
+        }
+    };
+
+    axios.post(req.headers.printhost, json, options)
+        .then((response) => {
+            if (response.data.ResponseCode !== '000') {
+
+                let error = {
+                    "error_status": response.data.Message,
+                    "verify_url": "",
+                    "request": ace_req
+                }
+    
+                res.setHeader('Content-Type', 'application/json');
+                res.send(error);
+
+            } else {
+
+                let result = {
+                    "error_status": "",
+                    "invoice_number": payload.invoice_number,
+                    "cu_serial_number": response.data["CUSN"],
+                    "cu_invoice_number": response.data["CUIN"],
+                    "verify_url": response.data["QRCode"],
+                    "description": response.data["Message"]
+                }
+
+                res.setHeader('Content-Type', 'application/json');
+                res.send(result);
+            }
+
+            if (qr_image_path) {
+                var qrcode = response.data.verificationUrl
+                var file_name = path.join(qr_image_path, `${response.data.controlCode}.png`);
+    
+                var qr_png = qr.image(qrcode, {type: 'png'});
+    
+                var tempFile = qr_png.pipe(require('fs').createWriteStream(file_name));
+    
+                tempFile.on('open', function(fd) {
+                    Jimp.read(file_name, function (err, image) {
+                        if (err) {
+                        //   console.log(err)
+                        } else {
+                        image.write(path.join(qr_image_path, `${response.data.controlCode}.jpeg`));
+                        }
+                    });
+                })    
+            }
+        
+        }).catch(ex => {
+            // console.log(ex.response)
+            // console.log(ex.response.data['Error'].message)
+            let error = {
+                "error_status": ex.message,
+                "verify_url": "",
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.send(error);
+
+        });
+});
+
+
 // let server = app.listen(port, host, () => {
 //     console.log('Server Listening')
 // });
